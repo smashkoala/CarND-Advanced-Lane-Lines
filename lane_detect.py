@@ -342,10 +342,7 @@ def pipeline_lanes(image):
     result = undistort_images(objpoints, imgpoints, image)
     result2 = pipeline(result)
     result3 = warp_image(result2, corners)
-    if left_lane.detected and right_lane.detected:
-        left, right, left_cr, right_cr = find_lane_continuous(result3, left, right)
-    else:
-        left, right, left_cr, right_cr = find_lanes(result3)
+    left, right, left_cr, right_cr = find_lanes(result3)
     measure_curvature(left, right, left_cr, right_cr)
     data = draw_image(result, result3, left, right)
     return data
@@ -373,10 +370,6 @@ dist_pickle = pickle.load( open( "wide_dist_pickle.p", "rb" ) )
 objpoints = dist_pickle["objpoints"]
 imgpoints = dist_pickle["imgpoints"]
 corners = [[200, 720], [580, 460], [1060, 720], [698, 460]]
-
-from line import Line
-right_lane = Line()
-left_lane = Line()
 
 output = 'test_output.mp4'
 clip1 = VideoFileClip("project_video.mp4")
