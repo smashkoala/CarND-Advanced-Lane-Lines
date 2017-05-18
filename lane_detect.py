@@ -8,7 +8,7 @@ import cv2
 import glob
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-#%matplotlib qt
+from line import Line
 
 # Define conversions in x and y from pixels space to meters
 ym_per_pix = 30/720 # meters per pixel in y dimension
@@ -236,7 +236,7 @@ def find_lanes(binary_warped):
 
     return left_fit, right_fit, left_fit_cr, right_fit_cr
 
-def fine_lane_continuous(binary_warped, left_fit, right_fit):
+def find_lane_continuous(binary_warped, left_fit, right_fit):
     # Assume you now have a new warped binary image
     # from the next frame of video (also called "binary_warped")
     # It's now much easier to find line pixels!
@@ -260,7 +260,10 @@ def fine_lane_continuous(binary_warped, left_fit, right_fit):
     left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
     right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
-    return left_fit, right_fit
+    left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
+    right_fit_cr = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)
+
+    return left_fit, right_fit, left_fit_cr, right_fit_cr
 
 def measure_curvature(left_fit, right_fit, left_fit_cr, right_fit_cr):
     # Generate some fake data to represent lane-line pixels
@@ -334,6 +337,34 @@ def draw_image(original_img, binary_warped, left_fit, right_fit):
         plt.show()
     return result
 
+def sanity_check(left_fit, right_fit, ploty):
+    global notrack_cnt
+
+    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+    diff =  right_fitx - left_fitx
+    print(diff)
+    if (diff < 800).any() or (diff > 950).any():
+        print("Parallel NOK: notrackcnt = %d" % notrack_cnt)
+        left_lane.detected = False
+        right_lane.detected = False
+        notrack_cnt += 1
+    else:
+        print("Parallel OK")
+        left_lane.update_lane_data(left_fit, left_fitx, ploty)
+        right_lane.update_lane_data(right_fit, right_fitx, ploty)
+        if left_lane.detected is False or right_lane.detected is False:
+            print("update_lane_data NOK: notrack_cnt = %d", notrack_cnt)
+            notrack_cnt += 1
+        else:
+            notrack_cnt = 0
+
+    if notrack_cnt == 10:
+        left_lane.reset()
+        right_lane.reset()
+        notrack_cnt = 0
+    return left_lane.bestx, right_lane.bestx
+
 # Import everything needed to edit/save/watch video clips
 from moviepy.editor import VideoFileClip
 
@@ -342,9 +373,16 @@ def pipeline_lanes(image):
     result = undistort_images(objpoints, imgpoints, image)
     result2 = pipeline(result)
     result3 = warp_image(result2, corners)
-    left, right, left_cr, right_cr = find_lanes(result3)
-    measure_curvature(left, right, left_cr, right_cr)
-    data = draw_image(result, result3, left, right)
+    if left_lane.detected and right_lane.detected:
+        print("Continuous")
+        left, right, left_cr, right_cr = find_lane_continuous(result3, left_lane.current_fit, right_lane.current_fit)
+    else:
+        print("All scanning")
+        left, right, left_cr, right_cr = find_lanes(result3)
+    ploty = np.linspace(0, result3.shape[0]-1, result3.shape[0] )
+    sanity_check(left, right, ploty)
+#    measure_curvature(left_lane.best_fit, right_lane.best_fit, left_cr, right_cr)
+    data = draw_image(result, result3, left_lane.best_fit, right_lane.best_fit)
     return data
 
 def process_image(image):
@@ -356,12 +394,24 @@ def debug():
     images += glob.glob('test_images/test*.jpg')
     for image_name in images:
         img = cv2.imread(image_name)
-        image = undistort_images(objpoints, imgpoints, img)
-        result = pipeline(image)
-        result2 = warp_image(result, corners)
-        left, right, left_cr, right_cr = find_lanes(result2)
-        measure_curvature(left, right, left_cr, right_cr)
-        draw_image(image, result2, left, right)
+        result = undistort_images(objpoints, imgpoints, img)
+        result2 = pipeline(result)
+        result3 = warp_image(result2, corners)
+        if left_lane.detected and right_lane.detected:
+            print("Continuous")
+            left, right, left_cr, right_cr = find_lane_continuous(result3, left_lane.current_fit, right_lane.current_fit)
+        else:
+            print("All scanning")
+            left, right, left_cr, right_cr = find_lanes(result3)
+
+        ploty = np.linspace(0, result3.shape[0]-1, result3.shape[0] )
+        sanity_check(left, right, ploty)
+    #    measure_curvature(left_lane.best_fit, right_lane.best_fit, left_cr, right_cr)
+        print("Left lane best fit")
+        print(left_lane.best_fit)
+        print("Right lane best fit")
+        print(right_lane.best_fit)
+        data = draw_image(result, result3, left_lane.best_fit, right_lane.best_fit)
 
 #objpoints, imgpoints = prepare_calibration()
 #test_images(objpoints, imgpoints)
@@ -370,6 +420,9 @@ dist_pickle = pickle.load( open( "wide_dist_pickle.p", "rb" ) )
 objpoints = dist_pickle["objpoints"]
 imgpoints = dist_pickle["imgpoints"]
 corners = [[200, 720], [580, 460], [1060, 720], [698, 460]]
+left_lane = Line()
+right_lane = Line()
+notrack_cnt = 0
 
 output = 'test_output.mp4'
 clip1 = VideoFileClip("project_video.mp4")
