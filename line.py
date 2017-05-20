@@ -10,10 +10,16 @@ class Line():
         self.recent_xfitted = np.empty((0, 720), float) #OK
         #polynomials coeffcient of the last n fits of the line
         self.recent_xfit = np.empty((0, 3), float)
+
+        self.recent_xfit_cr = np.empty((0,3), float)
+
         #average x values of the fitted line over the last n iterations
         self.bestx = None #Cannot see how to average x values
         #polynomial coefficients averaged over the last n iterations
         self.best_fit = None
+
+        self.best_fit_cr = None
+
         #polynomial coefficients for the most recent fit
         self.current_xfitted = None #OK
         #radius of curvature of the line in some units
@@ -36,13 +42,12 @@ class Line():
         self.detected = False
         self.recent_xfitted = np.empty((0, 720), float) #OK
         self.recent_xfit = np.empty((0, 3), float)
+        self.recent_xfit_cr = np.empty((0, 3), float)
         self.current_xfitted = None
         self.current_fit = None
-        self.radius_of_curvature = None
-        self.line_base_pos = None
         self.diffs = np.array([0,0,0], dtype='float') #OK
 
-    def update_lane_data(self, line_fit, line_fitx, ploty):
+    def update_lane_data(self, line_fit, line_fitx, line_fit_cr, ploty):
         ym_per_pix = 30/720 # meters per pixel in y dimension
         xm_per_pix = 3.7/700 # meters per pixel in x dimension
         max_count = 10
@@ -72,13 +77,15 @@ class Line():
                 self.count += 1
 
             self.recent_xfit = np.append(self.recent_xfit, line_fit.reshape(1,3), axis=0)
+            self.recent_xfit_cr = np.append(self.recent_xfit_cr, line_fit_cr.reshape(1,3), axis=0)
             self.recent_xfitted = np.append(self.recent_xfitted, line_fitx.reshape(1, 720), axis=0)
             self.current_fit = line_fit
             self.current_xfitted = line_fitx
             self.bestx = np.mean(self.recent_xfitted, axis = 0)
             self.best_fit = np.mean(self.recent_xfit, axis = 0)
-            self.radius_of_curvature = ((1 + (2*self.best_fit[0]*y_eval + self.best_fit[1])**2)**1.5) / np.absolute(2*self.best_fit[0])
-            self.line_base_pos = abs(640.0-self.bestx[-1])
+            self.best_fit_cr = np.mean(self.recent_xfit_cr, axis = 0)
+            self.radius_of_curvature = ((1 + (2*self.best_fit_cr[0]*y_eval*ym_per_pix + self.best_fit_cr[1])**2)**1.5) / np.absolute(2*self.best_fit_cr[0])
+            self.line_base_pos = abs(640.0-self.bestx[-1])*xm_per_pix
             print("Base position = %3f" % self.line_base_pos)
 
         return self.best_fit

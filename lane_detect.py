@@ -222,13 +222,13 @@ def find_lanes(binary_warped):
     out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
     out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
 
-    if DEBUG:
-        fig = plt.imshow(out_img)
-        plt.plot(left_fitx, ploty, color='yellow')
-        plt.plot(right_fitx, ploty, color='yellow')
-        plt.xlim(0, 1280)
-        plt.ylim(720, 0)
-        plt.show()
+    # if DEBUG:
+    #     fig = plt.imshow(out_img)
+    #     plt.plot(left_fitx, ploty, color='yellow')
+    #     plt.plot(right_fitx, ploty, color='yellow')
+    #     plt.xlim(0, 1280)
+    #     plt.ylim(720, 0)
+    #     plt.show()
 
     # Fit new polynomials to x,y in world space
     left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
@@ -332,18 +332,33 @@ def draw_image(original_img, binary_warped, left_fit, right_fit):
 
     # Combine the result with the original image
     result = cv2.addWeighted(original_img, 1, newwarp, 0.3, 0)
+    curvature = (left_lane.radius_of_curvature + right_lane.radius_of_curvature) / 2
+    text1 = 'Lane curvature = %4.2f m' % curvature
+
+    car_position = (left_lane.line_base_pos - right_lane.line_base_pos / 2)
+    if car_position < 0:
+        text2 = 'Vehicle is %1.2f m right of the center' % abs(car_position)
+    else:
+        text2 = 'Vehicle is %1.2f m left of the center' % abs(car_position)
+    font = cv2.FONT_HERSHEY_COMPLEX
+    font_size = 1.0
+    color=(0,0,0)
+    result = cv2.putText(result, text1, (10, 50), font, font_size, color, 4)
+    result = cv2.putText(result, text2, (10, 100), font, font_size, color, 4)
+
     if DEBUG:
         plt.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
         plt.show()
+
     return result
 
-def sanity_check(left_fit, right_fit, ploty):
+def sanity_check(left_fit, right_fit, left_fit_cr, right_fit_cr, ploty):
     global notrack_cnt
 
     left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
     right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
     diff =  right_fitx - left_fitx
-    print(diff)
+    #print(diff)
     if (diff < 800).any() or (diff > 950).any():
         print("Parallel NOK: notrackcnt = %d" % notrack_cnt)
         left_lane.detected = False
@@ -351,8 +366,8 @@ def sanity_check(left_fit, right_fit, ploty):
         notrack_cnt += 1
     else:
         print("Parallel OK")
-        left_lane.update_lane_data(left_fit, left_fitx, ploty)
-        right_lane.update_lane_data(right_fit, right_fitx, ploty)
+        left_lane.update_lane_data(left_fit, left_fitx, left_fit_cr, ploty)
+        right_lane.update_lane_data(right_fit, right_fitx, right_fit_cr, ploty)
         if left_lane.detected is False or right_lane.detected is False:
             print("update_lane_data NOK: notrack_cnt = %d", notrack_cnt)
             notrack_cnt += 1
@@ -380,7 +395,7 @@ def pipeline_lanes(image):
         print("All scanning")
         left, right, left_cr, right_cr = find_lanes(result3)
     ploty = np.linspace(0, result3.shape[0]-1, result3.shape[0] )
-    sanity_check(left, right, ploty)
+    sanity_check(left, right, left_cr, right_cr, ploty)
 #    measure_curvature(left_lane.best_fit, right_lane.best_fit, left_cr, right_cr)
     data = draw_image(result, result3, left_lane.best_fit, right_lane.best_fit)
     return data
@@ -405,7 +420,7 @@ def debug():
             left, right, left_cr, right_cr = find_lanes(result3)
 
         ploty = np.linspace(0, result3.shape[0]-1, result3.shape[0] )
-        sanity_check(left, right, ploty)
+        sanity_check(left, right, left_cr, right_cr, ploty)
     #    measure_curvature(left_lane.best_fit, right_lane.best_fit, left_cr, right_cr)
         print("Left lane best fit")
         print(left_lane.best_fit)
