@@ -6,7 +6,6 @@ import matplotlib.image as mpimg
 import numpy as np
 import cv2
 import glob
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 from line import Line
 
@@ -16,6 +15,7 @@ xm_per_pix = 3.7/700 # meters per pixel in x dimension
 
 DEBUG = False
 
+#Prepare data for camera calibration
 def prepare_calibration():
     # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
     objp = np.zeros((6*9,3), np.float32)
@@ -27,6 +27,7 @@ def prepare_calibration():
 
     # Make a list of calibration images
     images = glob.glob('camera_cal/calibration*.jpg')
+
     # Step through the list and search for chessboard corners
     for idx, fname in enumerate(images):
         img = cv2.imread(fname)
@@ -39,10 +40,13 @@ def prepare_calibration():
             objpoints.append(objp)
             imgpoints.append(corners)
 
-            #Draw and display the corners
-            cv2.drawChessboardCorners(img, (9,6), corners, ret)
-            cv2.imshow('img', img)
-            cv2.waitKey(500)
+            if DEBUG:
+                #Draw and display the corners
+                cv2.drawChessboardCorners(img, (9,6), corners, ret)
+                cv2.imshow('img', img)
+                fname_save = 'calibration_result%d.jpg' % idx
+                cv2.imwrite(fname_save, img)
+                cv2.waitKey(500)
 
         cv2.destroyAllWindows()
 
@@ -52,6 +56,7 @@ def prepare_calibration():
     pickle.dump( calib_pickle, open( "wide_dist_pickle.p", "wb" ))
     return objpoints, imgpoints
 
+#A function to undistort a image
 def undistort_images(objpoints, imgpoints, img):
     # Test undistortion on an image
     img_size = (img.shape[1], img.shape[0])
@@ -60,23 +65,16 @@ def undistort_images(objpoints, imgpoints, img):
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size, None,None)
 
     dst = cv2.undistort(img, mtx, dist, None, mtx)
-#    cv2.imwrite('calibration_wide/test_undist.jpg',dst)
 
     # Save the camera calibration result for later use (we won't worry about rvecs / tvecs)
     dist_pickle = {}
     dist_pickle["mtx"] = mtx
     dist_pickle["dist"] = dist
     pickle.dump( dist_pickle, open( "camera_calib_pickle.p", "wb" ) )
-    #dst = cv2.cvtColor(dst, cv2.COLOR_BGR2RGB)
-    # Visualize undistortion
-    # cv2.imshow('img', img)
-    # cv2.waitKey(1000)
-    # cv2.imshow('dst', dst)
-    # cv2.waitKey(1000)
+
     return dst
 
-# Edit this function to create your own pipeline.
-# AP: Update this pipeline to provide much better detection
+#A function to generate a binary image with a combination of color and gradient thresholding
 def pipeline(img, s_thresh=(170, 255), sx_thresh=(20, 100)):
     img = np.copy(img)
     # Convert to HSV color space and separate the V channel
@@ -104,49 +102,37 @@ def pipeline(img, s_thresh=(170, 255), sx_thresh=(20, 100)):
     combined[((sxbinary == 1) | (s_binary == 1))] = 1
     return combined
 
-def warp_image(img, corners):
+def warp_image(img):
      # Grab the image shape
     img_size = (img.shape[1], img.shape[0])
 
-    # For source points I'm grabbing the outer four detected corners
     src = np.float32([corners[0], corners[1], corners[-1], corners[-2]])
-#    print(src)
-    # For destination points, I'm arbitrarily choosing some points to be
-    # a nice fit for displaying our warped result
-    # again, not exact, but close enough for our purposes
     dst = np.float32([[corners[0][0], img_size[1]], [corners[0][0], 0],
                                  [corners[2][0], 0],
                                  [corners[2][0], img_size[1]]])
-#    print(dst)
-    # Given src and dst points, calculate the perspective transform matrix
     M = cv2.getPerspectiveTransform(src, dst)
+
     # Warp the image using OpenCV warpPerspective()
     warped = cv2.warpPerspective(img, M, img_size)
 
     # Return the resulting image and matrix
     return warped
 
-def unwarp_image(img, corners):
+def unwarp_image(img):
     img_size = (img.shape[1], img.shape[0])
 
     # For source points I'm grabbing the outer four detected corners
     dst = np.float32([corners[0], corners[1], corners[-1], corners[-2]])
-#    print(src)
-    # For destination points, I'm arbitrarily choosing some points to be
-    # a nice fit for displaying our warped result
-    # again, not exact, but close enough for our purposes
     src = np.float32([[corners[0][0], img_size[1]], [corners[0][0], 0],
                                  [corners[2][0], 0],
                                  [corners[2][0], img_size[1]]])
-#    print(dst)
-    # Given src and dst points, calculate the perspective transform matrix
     M = cv2.getPerspectiveTransform(src, dst)
+    # Unwarp the image using OpenCV warpPerspective()
     unwarped = cv2.warpPerspective(img, M, img_size)
 
     return unwarped
 
 def find_lanes(binary_warped):
-    # Assuming you have created a warped binary image called "binary_warped"
     # Take a histogram of the bottom half of the image
     histogram = np.sum(binary_warped[int(binary_warped.shape[0]/2):,:], axis=0)
     # Create an output image to draw on and  visualize the result
@@ -222,13 +208,14 @@ def find_lanes(binary_warped):
     out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
     out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
 
-    # if DEBUG:
-    #     fig = plt.imshow(out_img)
-    #     plt.plot(left_fitx, ploty, color='yellow')
-    #     plt.plot(right_fitx, ploty, color='yellow')
-    #     plt.xlim(0, 1280)
-    #     plt.ylim(720, 0)
-    #     plt.show()
+    if DEBUG:# Save a image only for debugging purpose
+        fig = plt.imshow(out_img)
+        plt.plot(left_fitx, ploty, color='yellow')
+        plt.plot(right_fitx, ploty, color='yellow')
+        plt.xlim(0, 1280)
+        plt.ylim(720, 0)
+        #plt.show()
+        plt.savefig('lane_fit.jpg')
 
     # Fit new polynomials to x,y in world space
     left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
@@ -236,10 +223,8 @@ def find_lanes(binary_warped):
 
     return left_fit, right_fit, left_fit_cr, right_fit_cr
 
+#A function to detect lanes when previsouly detected lane data is reliable.
 def find_lane_continuous(binary_warped, left_fit, right_fit):
-    # Assume you now have a new warped binary image
-    # from the next frame of video (also called "binary_warped")
-    # It's now much easier to find line pixels!
     nonzero = binary_warped.nonzero()
     nonzeroy = np.array(nonzero[0])
     nonzerox = np.array(nonzero[1])
@@ -247,11 +232,11 @@ def find_lane_continuous(binary_warped, left_fit, right_fit):
     left_lane_inds = ((nonzerox > (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] - margin)) & (nonzerox < (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] + margin)))
     right_lane_inds = ((nonzerox > (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] - margin)) & (nonzerox < (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] + margin)))
 
-    # Again, extract left and right line pixel positions
     leftx = nonzerox[left_lane_inds]
     lefty = nonzeroy[left_lane_inds]
     rightx = nonzerox[right_lane_inds]
     righty = nonzeroy[right_lane_inds]
+
     # Fit a second order polynomial to each
     left_fit = np.polyfit(lefty, leftx, 2)
     right_fit = np.polyfit(righty, rightx, 2)
@@ -264,51 +249,6 @@ def find_lane_continuous(binary_warped, left_fit, right_fit):
     right_fit_cr = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)
 
     return left_fit, right_fit, left_fit_cr, right_fit_cr
-
-def measure_curvature(left_fit, right_fit, left_fit_cr, right_fit_cr):
-    # Generate some fake data to represent lane-line pixels
-    ploty = np.linspace(0, 719, num=720)# to cover same y-range as image
-    # quadratic_coeff = 3e-4 # arbitrary quadratic coefficient
-    # # For each y position generate random x position within +/-50 pix
-    # # of the line base position in each case (x=200 for left, and x=900 for right)
-    # leftx = np.array([200 + (y**2)*quadratic_coeff + np.random.randint(-50, high=51)
-    #                               for y in ploty])
-    # rightx = np.array([900 + (y**2)*quadratic_coeff + np.random.randint(-50, high=51)
-    #                                 for y in ploty])
-    #
-    # leftx = leftx[::-1]  # Reverse to match top-to-bottom in y
-    # rightx = rightx[::-1]  # Reverse to match top-to-bottom in y
-
-
-    # Fit a second order polynomial to pixel positions in each fake lane line
-    # left_fit = np.polyfit(ploty, leftx, 2)
-    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-    # right_fit = np.polyfit(ploty, rightx, 2)
-    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-
-    # Plot up the fake data
-    #mark_size = 3
-    # plt.plot(leftx, ploty, 'o', color='red', markersize=mark_size)
-    # plt.plot(rightx, ploty, 'o', color='blue', markersize=mark_size)
-    if DEBUG:
-        plt.xlim(0, 1280)
-        plt.ylim(0, 720)
-        plt.plot(left_fitx, ploty, color='green', linewidth=3)
-        plt.plot(right_fitx, ploty, color='green', linewidth=3)
-        plt.gca().invert_yaxis() # to visualize as we do the images
-        plt.show()
-
-    y_eval = np.max(ploty)
-    # left_curverad = ((1 + (2*left_fit[0]*y_eval + left_fit[1])**2)**1.5) / np.absolute(2*left_fit[0])
-    # right_curverad = ((1 + (2*right_fit[0]*y_eval + right_fit[1])**2)**1.5) / np.absolute(2*right_fit[0])
-    # print(left_curverad, right_curverad)
-
-    # Calculate the new radii of curvature
-    left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
-    right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
-    # Now our radius of curvature is in meters
-    print(left_curverad, 'm', right_curverad, 'm')
-    # Example values: 632.1 m    626.2 m
 
 def draw_image(original_img, binary_warped, left_fit, right_fit):
     # Create an image to draw the lines on
@@ -328,12 +268,12 @@ def draw_image(original_img, binary_warped, left_fit, right_fit):
     cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
 
     # Warp the blank back to original image space using inverse perspective matrix (Minv)
-    newwarp = unwarp_image(color_warp, corners)
+    newwarp = unwarp_image(color_warp)
 
     # Combine the result with the original image
     result = cv2.addWeighted(original_img, 1, newwarp, 0.3, 0)
     curvature = (left_lane.radius_of_curvature + right_lane.radius_of_curvature) / 2
-    text1 = 'Lane curvature = %4.2f m' % curvature
+    text1 = 'Lane curvature = %4d m' % curvature
 
     car_position = (left_lane.line_base_pos - right_lane.line_base_pos / 2)
     if car_position < 0:
@@ -345,10 +285,6 @@ def draw_image(original_img, binary_warped, left_fit, right_fit):
     color=(0,0,0)
     result = cv2.putText(result, text1, (10, 50), font, font_size, color, 4)
     result = cv2.putText(result, text2, (10, 100), font, font_size, color, 4)
-
-    if DEBUG:
-        plt.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
-        plt.show()
 
     return result
 
@@ -383,20 +319,27 @@ def sanity_check(left_fit, right_fit, left_fit_cr, right_fit_cr, ploty):
 # Import everything needed to edit/save/watch video clips
 from moviepy.editor import VideoFileClip
 
-
+#Main pileline function for entire processing
 def pipeline_lanes(image):
+    #Undistort image
     result = undistort_images(objpoints, imgpoints, image)
+    #Generate a binary image
     result2 = pipeline(result)
-    result3 = warp_image(result2, corners)
+    #Warp the bingary image
+    result3 = warp_image(result2)
+    #if lanes are properly detected last time
     if left_lane.detected and right_lane.detected:
         print("Continuous")
+        #Try to detect lanes using previous lane data
         left, right, left_cr, right_cr = find_lane_continuous(result3, left_lane.current_fit, right_lane.current_fit)
     else:
         print("All scanning")
+        #Try to detect lanes by scanning whole image
         left, right, left_cr, right_cr = find_lanes(result3)
     ploty = np.linspace(0, result3.shape[0]-1, result3.shape[0] )
+    #Check if the lane data is appropriate
     sanity_check(left, right, left_cr, right_cr, ploty)
-#    measure_curvature(left_lane.best_fit, right_lane.best_fit, left_cr, right_cr)
+    #Generate final result image
     data = draw_image(result, result3, left_lane.best_fit, right_lane.best_fit)
     return data
 
@@ -404,6 +347,7 @@ def process_image(image):
     result = pipeline_lanes(image)
     return result
 
+#A debug function with test images
 def debug():
     images = glob.glob('test_images/straight_line*.jpg')
     images += glob.glob('test_images/test*.jpg')
@@ -411,7 +355,7 @@ def debug():
         img = cv2.imread(image_name)
         result = undistort_images(objpoints, imgpoints, img)
         result2 = pipeline(result)
-        result3 = warp_image(result2, corners)
+        result3 = warp_image(result2)
         if left_lane.detected and right_lane.detected:
             print("Continuous")
             left, right, left_cr, right_cr = find_lane_continuous(result3, left_lane.current_fit, right_lane.current_fit)
@@ -421,44 +365,87 @@ def debug():
 
         ploty = np.linspace(0, result3.shape[0]-1, result3.shape[0] )
         sanity_check(left, right, left_cr, right_cr, ploty)
-    #    measure_curvature(left_lane.best_fit, right_lane.best_fit, left_cr, right_cr)
         print("Left lane best fit")
         print(left_lane.best_fit)
         print("Right lane best fit")
         print(right_lane.best_fit)
         data = draw_image(result, result3, left_lane.best_fit, right_lane.best_fit)
 
-#objpoints, imgpoints = prepare_calibration()
-#test_images(objpoints, imgpoints)
+#A function to create images for a writeup report
+def create_report():
+#    objpoints, imgpoints = prepare_calibration()
+    dist_pickle = pickle.load( open( "wide_dist_pickle.p", "rb" ) )
+    objpoints = dist_pickle["objpoints"]
+    imgpoints = dist_pickle["imgpoints"]
 
-dist_pickle = pickle.load( open( "wide_dist_pickle.p", "rb" ) )
-objpoints = dist_pickle["objpoints"]
-imgpoints = dist_pickle["imgpoints"]
-corners = [[200, 720], [580, 460], [1060, 720], [698, 460]]
-left_lane = Line()
-right_lane = Line()
-notrack_cnt = 0
+    images = ["./test_images/straight_lines1.jpg", "./test_images/test1.jpg"]
+    count = 1
 
-output = 'test_output.mp4'
-clip1 = VideoFileClip("project_video.mp4")
-clip = clip1.fl_image(process_image)
-clip.write_videofile(output, audio=False)
+    for image_name in images:
+        print(count)
+        img = cv2.imread(image_name)
+        result = undistort_images(objpoints, imgpoints, img)
+        fname = 'undistort_image%d.jpg' % count
+        cv2.imwrite(fname, result)
 
-#debug()
+        result2 = pipeline(result)
+        fname2 = 'binary_image%d.jpg' % count
+        cv2.imwrite(fname2, result2*255)
 
-#Plot the result
-# f, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(24, 9))
-# f.tight_layout()
-#
-# ax1.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-# ax1.set_title('Original Image', fontsize=20)
-#
-# ax2.imshow(result, cmap='gray')
-# ax2.set_title('Pipeline Result', fontsize=20)
-#
-# plt.subplots_adjust(left=0., right=1, top=0.9, bottom=0.)
-#
-# ax3.imshow(result2, cmap='gray')
-# ax3.set_title('Warped image', fontsize=20)
-#
-# plt.show()
+        result3 = warp_image(result2)
+
+        fname3 = 'warp_image%d.jpg' % count
+        cv2.imwrite(fname3, result3*255)
+
+        f, (ax1, ax2) = plt.subplots(1, 2, figsize=(24, 9))
+        f.tight_layout()
+
+        ax1.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
+        ax1.set_title('Original iamge', fontsize=20)
+
+        plt.subplots_adjust(left=0., right=1, top=0.9, bottom=0.)
+
+        ax2.imshow(result2, cmap='gray')
+        ax2.set_title('Pipleline result', fontsize=20)
+
+        fname3 = 'comparison%d.jpg' % count
+        f.savefig(fname3)
+        plt.close('all')
+
+        left, right, left_cr, right_cr = find_lanes(result3)
+
+        ploty = np.linspace(0, result3.shape[0]-1, result3.shape[0] )
+        sanity_check(left, right, left_cr, right_cr, ploty)
+        data = draw_image(result, result3, left, right)
+
+        fname4 = 'result_image%d.jpg' % count
+        cv2.imwrite(fname4, data)
+
+        left_lane.reset()
+        right_lane.reset()
+        count += 1
+
+#Code to produce images for writeup report####
+if DEBUG:
+    corners = [[200, 720], [580, 460], [1060, 720], [698, 460]]
+    left_lane = Line()
+    right_lane = Line()
+    create_report()
+##############################################
+
+#Acutal code for lane tracking ###############
+else:
+    objpoints, imgpoints = prepare_calibration()
+
+    dist_pickle = pickle.load( open( "wide_dist_pickle.p", "rb" ) )
+    objpoints = dist_pickle["objpoints"]
+    imgpoints = dist_pickle["imgpoints"]
+    corners = [[200, 720], [580, 460], [1060, 720], [698, 460]]
+    left_lane = Line()
+    right_lane = Line()
+    notrack_cnt = 0
+    output = 'test_output.mp4'
+    clip1 = VideoFileClip("project_video.mp4")
+    clip = clip1.fl_image(process_image)
+    clip.write_videofile(output, audio=False)
+###############################################
