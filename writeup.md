@@ -14,7 +14,7 @@ The goals / steps of this project are the following:
 [//]: # (Image References)
 
 [image1]: ./undistort_image1.jpg "Undistorted"
-[image2]: ./test_images/straight_lines1.jpg "Road Transformed"
+[image2]: ./straight_lines1.jpg "Road Transformed"
 [image3]: ./binary_image1.jpg "Binary Example"
 [image4]: ./warp_image1.jpg "Warp Example"
 [image5]: ./lane_fit.jpg "Fit Visual"
@@ -29,9 +29,9 @@ The goals / steps of this project are the following:
 
 ### Writeup / README
 
-#### 1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  You can submit your writeup as markdown or pdf.  [Here](https://github.com/udacity/CarND-Advanced-Lane-Lines/blob/master/writeup_template.md) is a template writeup for this project you can use as a guide and a starting point.  
+#### 1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  You can submit your writeup as markdown or pdf.
 
-Here in GitHub, you can find my writeup.
+[Here](https://github.com/smashkoala/CarND-Advanced-Lane-Lines/blob/master/writeup.md) in GitHub, you can find my writeup.
 
 ### Camera Calibration
 
@@ -43,7 +43,7 @@ The code for this step is contained in `prepare_calibration()` and `undistort_im
 I start by preparing "object points", which will be the (x, y, z) coordinates of the chessboard corners in the world. Here I am assuming the chessboard is fixed on the (x, y) plane at z=0, such that the object points are the same for each calibration image.  Thus, `objp` is just a replicated array of coordinates, and `objpoints` will be appended with a copy of it every time I successfully detect all chessboard corners in a test image.  `imgpoints` will be appended with the (x, y) pixel position of each of the corners in the image plane with each successful chessboard detection.  
 
 2) undistort_images()  
-I then used the output `objpoints` and `imgpoints` to compute the camera calibration and distortion coefficients using the `cv2.calibrateCamera()` function.  I applied this distortion correction to the test image using the `cv2.undistort()` function and obtained this result:
+I then use the output `objpoints` and `imgpoints` to compute the camera calibration and distortion coefficients using the `cv2.calibrateCamera()` function.  I apply this distortion correction to the test image using the `cv2.undistort()` function and obtain this result:
 
 ![alt text][image1]
 
@@ -62,7 +62,7 @@ I used a combination of color and gradient thresholds to generate a binary image
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
-The code for my perspective transform includes a function called `warp_image()`, which appears in lines 105 through 119 in the file `lane_detect.py`.  The `warp_image()` function takes as inputs an image (`img`). Source (`src`) and destination (`dst`) points are given through global variable `corners`.  I hardcoded the source and destination points. These points are manually identified by visually checking the coordinates of the transforming area in a drawing tool.
+The code for my perspective transform is included in a function called `warp_image()`, which appears in lines 105 through 119 in the file `lane_detect.py`.  The `warp_image()` function takes an image (`img`) as an input. Source (`src`) and destination (`dst`) points are given through a global variable `corners`.  I hardcoded the source and destination points. These points are manually identified by visually checking the coordinates of the transforming area in a drawing tool.
 
 This resulted in the following source and destination points:
 
@@ -80,7 +80,7 @@ I verified that my perspective transform was working as expected by visually che
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
 The lane detection process takes place in `find_lanes()` function in `lane_detect.py` (code line from 135 to 224). It takes a histogram of the bottom half of the image to find the peaks of the left and right lines. These become the starting points for the left and right lines.
-With these starting points, it creates windows on both left and right lines. The width of the windows is 200 pix, and the height of the windows is 80 pix. Within this window, it collects all pixel positions which are none-zero. It checks if 50 pix or more of none-zero pixels are included. If the window contain 50 pix or more, the center of the window is changed to the mean of none-zero pixel positions when the window slides upward.
+With these starting points, it creates windows on both left and right lines. The width of the windows is 200 pix, and the height of the windows is 80 pix. Within these windows, it collects all positions which are none-zero pixels. It checks if 50 pix or more of none-zero pixels are included in one window. If the window contains 50 pix or more, the center of the window is changed to the mean of none-zero pixel positions when the window slides upward.
 With these pixel positions, it fits a second order polynomial to find the lane lines. The following image show how this process works.
 
 ![alt text][image5]
@@ -91,7 +91,7 @@ The second order polynomial of real world space is calculated line 221-222 of `l
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-I implemented this step in lines 253 through 287 in my code in `lane_detect.py` in the function `draw_image()`.  Here is an example of my result on a test image:
+I implemented this step from lines 253 through 287 in `lane_detect.py` (in the function `draw_image()`).  Here is an example of my result on a test image:
 
 ![alt text][image6]
 
